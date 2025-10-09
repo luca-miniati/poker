@@ -1,11 +1,19 @@
 import glob
 import logging
 import os
+import sys
 import pandas as pd
 from collections import defaultdict
 from typing import Dict, List
 from pokerkit import HandHistory
 
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+stdout_handler = logging.StreamHandler(sys.stdout)
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+stdout_handler.setFormatter(formatter)
+logger.addHandler(stdout_handler)
 
 PROCESSED_DIR = 'data/handhq/processed'
 OUTPUT_DIR = os.path.join(PROCESSED_DIR, 'player_to_phhs')
@@ -42,6 +50,11 @@ class HandHQProcessor:
 
     
     def get_player_id(self, player_str):
+        '''
+        If `player_str` exists in the column 'player_str' in
+        `self.player_id_mapping`, return the 'player_id' corresponding
+        to that 'player_str'. Otherwise, add a new entry to the df.
+        '''
         match = self.player_id_mapping[self.player_id_mapping['player_str'] == player_str]
 
         if match.empty:
@@ -54,6 +67,9 @@ class HandHQProcessor:
             return match.iloc[0]['player_id']
 
     def parse_phhs_file(self, fn):
+        '''
+        Parse player hand histories from .phhs file.
+        '''
         hhs = []
         with open(fn, 'rb') as f:
             hhs = list(HandHistory.load_all(f))
@@ -65,6 +81,10 @@ class HandHQProcessor:
 
 
     def export_player_hhs_mapping(self):
+        '''
+        Write hand histories to player files. If the player file already
+        exists, the hand histories are appended.
+        '''
         for player_id, hhs in self.player_hhs_mapping.items():
             fn = os.path.join(PROCESSED_DIR, 'player_to_phhs', f'player_{str(player_id)}.phhs')
 
@@ -78,11 +98,18 @@ class HandHQProcessor:
 
 
     def export_player_id_mapping(self):
+        '''
+        Write `self.player_id_mapping` to a csv.
+        '''
         self.player_id_mapping.to_csv(PLAYER_ID_MAPPING_PATH, index=False)
 
 
     def process(self):
+        '''
+        Process all files in `self.data_dir`.
+        '''
         fns = glob.glob(os.path.join(self.data_dir, '*'))
+        logging.info(f'Found {len(fns)} files')
 
         for fn in fns:
             ext = os.path.splitext(fn)[1]
@@ -92,7 +119,10 @@ class HandHQProcessor:
 
             self.parse_phhs_file(fn)
         
+        logging.info(f'Exporting hand histories for {len(self.player_hhs_mapping)} players')
         self.export_player_hhs_mapping()
+
+        logging.info(f'Exporting player_id_mapping')
         self.export_player_id_mapping()
 
 
