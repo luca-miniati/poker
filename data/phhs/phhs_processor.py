@@ -61,6 +61,7 @@ class PHHSProcessor:
             'num_actions': len(hh.actions),
             'venue': hh.venue,
             'table': hh.table,
+            'are_hole_cards_shown': are_holdem_hole_cards_shown(hh),
         }
 
     
@@ -77,7 +78,7 @@ class PHHSProcessor:
             'seat',
             'starting_stack',
             'finishing_stack',
-            'amount_won'
+            'winnings'
         ]
         num_players = len(hh.players)
         return [
@@ -178,11 +179,12 @@ class PHHSProcessor:
         hands_df['small_bet'] = hands_df['small_bet'].astype('Float64')
         hands_df['big_bet'] = hands_df['big_bet'].astype('Float64')
         hands_df['min_bet'] = hands_df['min_bet'].astype(float)
+        hands_df['are_hole_cards_shown'] = hands_df['are_hole_cards_shown'].astype(bool)
 
         players_df = pd.DataFrame(players_rows)
         players_df['starting_stack'] = players_df['starting_stack'].astype('Float64')
         players_df['finishing_stack'] = players_df['finishing_stack'].astype('Float64')
-        players_df['amount_won'] = players_df['amount_won'].astype('Float64')
+        players_df['winnings'] = players_df['winnings'].astype('Float64')
         players_df['seat'] = players_df['seat'].astype(int)
         players_df['ante'] = players_df['ante'].astype(float)
         players_df['blind_or_straddle'] = players_df['blind_or_straddle'].astype(float)
@@ -206,36 +208,6 @@ class PHHSProcessor:
         self.batch_index += 1
 
     
-    def is_valid_hand(self, hh: HandHistory) -> bool:
-        '''
-        Returns whether the given hand has all the information we want.
-        '''
-        if not are_holdem_hole_cards_shown(hh):
-            return False
-        
-        if not hh.players:
-            self.log.error(f'Invalid hand history (no player names): {hh}')
-            return False
-        
-        if not hh.hand:
-            self.log.error(f'Invalid hand history (no hand id): {hh}')
-            return False
-        
-        if not hh.venue:
-            self.log.error(f'Invalid hand history (no venue): {hh}')
-            return False
-        
-        if not hh.table:
-            self.log.error(f'Invalid hand history (no table): {hh}')
-            return False
-        
-        if not hh.seats:
-            self.log.error(f'Invalid hand history (no seats): {hh}')
-            return False
-
-        return True
-
-    
     def process_file(self, file_path: Path) -> None:
         '''
         Process a single .phhs file.
@@ -249,9 +221,6 @@ class PHHSProcessor:
             hhs = list(HandHistory.load_all(f))
 
         for hh in hhs:
-            if not self.is_valid_hand(hh):
-                continue
-
             self.hh_buffer.append(hh)
 
             if len(self.hh_buffer) >= self.batch_size:

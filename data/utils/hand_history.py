@@ -1,5 +1,8 @@
 import re
-from typing import Optional, Tuple
+import duckdb
+import tomli_w
+import pandas as pd
+from typing import Optional, Tuple, List
 from pokerkit import HandHistory
 
 
@@ -32,3 +35,56 @@ def are_holdem_hole_cards_shown(hh: HandHistory) -> bool:
     '''
     match = re.search(HOLDEM_HOLE_CARDS_SHOWN_REGEX, ''.join(hh.actions))
     return match is not None
+
+
+def load_hhs_from_db(hand_ids: List[int], con: duckdb.DuckDBPyConnection) -> List[HandHistory]:
+    '''
+    Given a list of hand ids, query the database and return a list of `HandHistory`s.
+    '''
+    if not hand_ids:
+        return []
+
+
+    hand_ids_str = ','.join(map(str, hand_ids))
+    df_hands = con.execute(f'SELECT * FROM hands WHERE hand_id IN ({hand_ids_str})').fetchdf()
+    df_players = con.execute(f'SELECT * FROM players WHERE hand_id IN ({hand_ids_str}) ORDER BY player_idx').fetchdf()
+    df_actions = con.execute(f'SELECT * FROM actions WHERE hand_id IN ({hand_ids_str}) ORDER BY action_index').fetchdf()
+
+    players_by_hand = df_players.groupby('hand_id')
+    actions_by_hand = df_actions.groupby('hand_id')
+
+    hand_histories = []
+    for _, hand_row in df_hands.iterrows():
+        hand_id = hand_row['hand_id']
+
+        player_rows = players_by_hand.get_group(hand_id)
+        action_rows = actions_by_hand.get_group(hand_id)
+
+        def clean_dict(d):
+            result = {}
+            for k, v in d.items():
+                if isinstance(v, list) or pd.notna(v):
+                    result[k] = v
+            return result
+
+        hand_dict = clean_dict({
+            'variant': hand_row.get('variant'),
+            'antes': [p['ante'] for _, p in player_rows.iterrows()],
+            'min_bet': hand_row.get('min_bet'),
+            'bring_in': hand_row.get('bring_in'),
+            'small_bet': hand_row.get('small_bet'),
+            'big_bet': hand_row.get('big_bet'),
+            'players': list(player_rows['name']),
+            'starting_stacks': list(player_rows['starting_stack']),
+            'finishing_stacks': list(player_rows.get('finishing_stack', pd.NA)),
+            'winnings': list(player_rows.get('winnings', pd.NA)),
+            'actions': list(action_rows['raw_action']),
+            'venue': hand_row.get('venue'),
+            'table': hand_row.get('table'),
+        })
+
+        phh_string = tomli_w.dumps(hand_dict)
+        hh = HandHistory.loads(phh_string)
+        hand_histories.append(hh)
+
+    return hand_histories
