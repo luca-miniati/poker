@@ -8,7 +8,7 @@ from logging import Logger
 from typing import Dict, List
 from pokerkit import HandHistory
 from data.utils.logs import setup_logging
-from data.utils.hand_history import are_holdem_hole_cards_shown, ACTION_PARSING_REGEX
+from data.utils.hand_history import are_holdem_hole_cards_shown, ACTION_PARSING_REGEX, HOLDEM_HOLE_CARDS_SHOWN_REGEX
 
 
 OUTPUT_DIR = Path('data/phhs/out')
@@ -53,97 +53,98 @@ class PHHSProcessor:
         return {
             'hand_id': hh.hand,
             'variant': hh.variant,
-            'bring_in': hh.bring_in,
-            'small_bet': hh.small_bet,
-            'big_bet': hh.big_bet,
             'min_bet': hh.min_bet,
             'num_players': len(hh.players),
             'num_actions': len(hh.actions),
             'venue': hh.venue,
             'table': hh.table,
-            'are_hole_cards_shown': are_holdem_hole_cards_shown(hh),
+            # simplification: showdown <=> hole cards are shown
+            'is_showdown': are_holdem_hole_cards_shown(hh)
         }
 
     
-    def parse_players_from_hh(self, hh: HandHistory, hand_id: int) -> List[Dict]:
+    def parse_players_from_hh(self, hh: HandHistory, hand_id: str) -> List[Dict]:
         '''
         Given a hand history, construct rows for table `players`.
         '''
-        fields = [
-            'hand_id',
-            'ante',
-            'blind_or_straddle',
-            'name',
-            'player_idx',
-            'seat',
-            'starting_stack',
-            'finishing_stack',
-            'winnings'
-        ]
         num_players = len(hh.players)
+        game_state, _ = list(hh.state_actions)[0]
+        payoffs = game_state.payoffs
+        hole_cards = [None] * num_players
+        for _, action in hh.state_actions:
+            if not action: continue
+
+            match = re.match(HOLDEM_HOLE_CARDS_SHOWN_REGEX, action)
+            if match:
+                player_idx = int(match.group(1)) - 1
+                cards = match.group(2) + match.group(3)
+                hole_cards[player_idx] = cards
+
         return [
-            dict(zip(fields, values))
-            for values in zip(
-                [hand_id] * num_players,
-                hh.antes,
-                hh.blinds_or_straddles,
-                hh.players,
-                range(1, num_players + 1),
-                hh.seats,
-                hh.starting_stacks,
-                hh.finishing_stacks if hh.finishing_stacks
-                                    else [None] * num_players,
-                hh.winnings if hh.winnings
-                            else [None] * num_players
-            )
+            {
+                'hand_id': hand_id,
+                'ante': ante,
+                'blind_or_straddle': blind,
+                'name': name,
+                'player_idx': i + 1,
+                'starting_stack': stack,
+                'payoff': payoff,
+                'hole_cards': cards,
+            }
+            for i, (ante, blind, name, stack, payoff, cards)
+            in enumerate(zip(hh.antes, hh.blinds_or_straddles, hh.players,
+                            hh.starting_stacks, payoffs, hole_cards))
         ]
 
     
-    def parse_actions_from_hh(self, hh: HandHistory, hand_id: int) -> List[Dict]:
+    def parse_actions_from_hh(self, hh: HandHistory, hand_id: str) -> List[Dict]:
         '''
         Given a hand history, construct rows for table `actions`.
         '''
         rows: List[Dict] = []
-        for idx, action in enumerate(hh.actions):
+        action_idx = 1
+        for state, action in hh.state_actions:
+            if not action: continue
+
+            action_dict = {
+                'hand_id': hand_id,
+                'action_index': action_idx,
+                'actor': None,
+                'action_type': None,
+                'amount': None,
+                'total_pot_amount': state.total_pot_amount,
+                'is_terminal': not state.status,
+                'cards': None,
+                'raw_action': action.strip()
+            }
+
             match = re.match(ACTION_PARSING_REGEX, action)
             if not match:
                 self.log.error(f'Actions could not be parsed from hand history: {hh.actions}')
-                rows.append({
-                    'hand_id': hand_id,
-                    'action_index': idx,
-                    'actor': None,
-                    'action_type': None,
-                    'amount': None,
-                    'cards': None,
-                    'raw_action': action.strip()
-                })
                 continue
 
-            actor = match.group('actor')
-            action_type = match.group('action_type')
+            action_dict['actor'] = match.group('actor')
+            action_dict['action_type'] = match.group('action_type')
+
             args = match.group('args')
             amount = None
             cards = None
 
             if args:
                 args = args.strip()
-                if action_type == 'cbr':
+                if action_dict['action_type'] == 'cbr':
                     try:
                         amount = float(args)
                     except ValueError:
                         amount = None
-                elif action_type in {'dh', 'db', 'sm', 'sd'}:
+                elif action_dict['action_type'] in {'dh', 'db', 'sm', 'sd'}:
                     cards = args
+            
+            action_dict['amount'] = amount
+            action_dict['cards'] = cards
 
-            rows.append({
-                'hand_id': hand_id,
-                'action_index': idx,
-                'actor': actor,
-                'action_type': action_type,
-                'amount': amount,
-                'cards': cards,
-                'raw_action': action.strip()
-            })
+            rows.append(action_dict)
+            action_idx += 1
         return rows
 
 
@@ -162,7 +163,7 @@ class PHHSProcessor:
         actions_rows: List[Dict] = []
         for hh in self.hh_buffer:
             hand_row: Dict = self.parse_hand_from_hh(hh)
-            hand_id: int = hand_row['hand_id']
+            hand_id: str = hand_row['hand_id']
             hands_rows.append(hand_row)
             players_rows.extend(self.parse_players_from_hh(hh, hand_id))
             actions_rows.extend(self.parse_actions_from_hh(hh, hand_id))
@@ -172,26 +173,26 @@ class PHHSProcessor:
         self.log.info(f'{len(actions_rows)} rows extracted for actions')
 
         hands_df = pd.DataFrame(hands_rows)
-        hands_df['hand_id'] = hands_df['hand_id'].astype(int)
+        hands_df['hand_id'] = hands_df['hand_id'].astype(str)
         hands_df['num_players'] = hands_df['num_players'].astype(int)
         hands_df['num_actions'] = hands_df['num_actions'].astype(int)
-        hands_df['bring_in'] = hands_df['bring_in'].astype('Float64')
-        hands_df['small_bet'] = hands_df['small_bet'].astype('Float64')
-        hands_df['big_bet'] = hands_df['big_bet'].astype('Float64')
-        hands_df['min_bet'] = hands_df['min_bet'].astype(float)
-        hands_df['are_hole_cards_shown'] = hands_df['are_hole_cards_shown'].astype(bool)
+        hands_df['min_bet'] = hands_df['min_bet'].astype('Float64')
+        hands_df['is_showdown'] = hands_df['is_showdown'].astype(bool)
 
         players_df = pd.DataFrame(players_rows)
+        players_df['hand_id'] = players_df['hand_id'].astype(str)
+        players_df['ante'] = players_df['ante'].astype('Float64')
+        players_df['blind_or_straddle'] = players_df['blind_or_straddle'].astype('Float64')
+        players_df['player_idx'] = players_df['player_idx'].astype(int)
         players_df['starting_stack'] = players_df['starting_stack'].astype('Float64')
-        players_df['finishing_stack'] = players_df['finishing_stack'].astype('Float64')
-        players_df['winnings'] = players_df['winnings'].astype('Float64')
-        players_df['seat'] = players_df['seat'].astype(int)
-        players_df['ante'] = players_df['ante'].astype(float)
-        players_df['blind_or_straddle'] = players_df['blind_or_straddle'].astype(float)
+        players_df['payoff'] = players_df['payoff'].astype('Float64')
 
         actions_df = pd.DataFrame(actions_rows)
-        actions_df['amount'] = actions_df['amount'].astype(float)
+        actions_df['hand_id'] = actions_df['hand_id'].astype(str)
         actions_df['action_index'] = actions_df['action_index'].astype(int)
+        actions_df['amount'] = actions_df['amount'].astype('Float64')
+        actions_df['total_pot_amount'] = actions_df['total_pot_amount'].astype('Float64')
+        actions_df['is_terminal'] = actions_df['is_terminal'].astype(bool)
 
         hands_filename = PARQUET_HANDS_DIR / f'part-{self.batch_index:04d}.parquet'
         players_filename = PARQUET_PLAYERS_DIR / f'part-{self.batch_index:04d}.parquet'
@@ -254,6 +255,7 @@ class PHHSProcessor:
         Process all folders in `self.root_dir`.
         '''
         warnings.filterwarnings('ignore', category=UserWarning, module='pokerkit.notation')
+        warnings.filterwarnings('ignore', category=UserWarning, module='pokerkit.state')
         folders: List[Path] = [p for p in self.root_dir.iterdir() if p.is_dir()]
         self.log.info(f'Found {len(folders)} folders')
         for folder_path in folders:
