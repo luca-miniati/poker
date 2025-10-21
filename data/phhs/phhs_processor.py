@@ -38,7 +38,7 @@ class PHHSProcessor:
     - `actions`
     Then, 3 corresponding tables are created in `data/db/master.db`.
     '''
-    def __init__(self, root_dir: str, batch_size: int = 10_000) -> None:
+    def __init__(self, root_dir: str, batch_size: int = 100_000) -> None:
         self.root_dir: Path = Path(root_dir)
         self.log: Logger = setup_logging(log_dir=LOG_DIR, script_name=Path(__file__).name)
         self.batch_size: int = batch_size
@@ -194,9 +194,9 @@ class PHHSProcessor:
         actions_df['total_pot_amount'] = actions_df['total_pot_amount'].astype('Float64')
         actions_df['is_terminal'] = actions_df['is_terminal'].astype(bool)
 
-        hands_filename = PARQUET_HANDS_DIR / f'part-{self.batch_index:04d}.parquet'
-        players_filename = PARQUET_PLAYERS_DIR / f'part-{self.batch_index:04d}.parquet'
-        actions_filename = PARQUET_ACTIONS_DIR / f'part-{self.batch_index:04d}.parquet'
+        hands_filename = PARQUET_HANDS_DIR / f'part-{self.batch_index:06d}.parquet'
+        players_filename = PARQUET_PLAYERS_DIR / f'part-{self.batch_index:06d}.parquet'
+        actions_filename = PARQUET_ACTIONS_DIR / f'part-{self.batch_index:06d}.parquet'
 
         self.log.info(f'Exporting to {hands_filename}')
         hands_df.to_parquet(hands_filename, index=False)
