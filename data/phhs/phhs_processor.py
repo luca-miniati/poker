@@ -275,5 +275,5 @@ if __name__ == '__main__':
     root_dir = args.root_dir
 
     hhqp = PHHSProcessor(root_dir)
-    hhqp.process()
+    # hhqp.process()
     hhqp.create_tables()

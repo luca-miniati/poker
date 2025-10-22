@@ -37,7 +37,7 @@ def are_holdem_hole_cards_shown(hh: HandHistory) -> bool:
     return match is not None
 
 
-def load_hhs_from_db(hand_ids: List[int], con: duckdb.DuckDBPyConnection) -> List[HandHistory]:
+def load_hhs_from_db(hand_ids: List[str], con: duckdb.DuckDBPyConnection) -> List[HandHistory]:
     '''
     Given a list of hand ids, query the database and return a list of `HandHistory`s.
     '''
@@ -45,7 +45,7 @@ def load_hhs_from_db(hand_ids: List[int], con: duckdb.DuckDBPyConnection) -> Lis
         return []
 
 
-    hand_ids_str = ','.join(map(str, hand_ids))
+    hand_ids_str = ','.join(map(lambda x: "'" + x + "'", hand_ids))
     df_hands = con.execute(f'SELECT * FROM hands WHERE hand_id IN ({hand_ids_str})').fetchdf()
     df_players = con.execute(f'SELECT * FROM players WHERE hand_id IN ({hand_ids_str}) ORDER BY player_idx').fetchdf()
     df_actions = con.execute(f'SELECT * FROM actions WHERE hand_id IN ({hand_ids_str}) ORDER BY action_index').fetchdf()
