@@ -32,7 +32,7 @@ class Hand:
         return next((p for p in self.players if p.name == name), None)
 
     @staticmethod
-    def from_db(hand_id: str, con: duckdb.DuckDBPyConnection) -> "Hand":
+    def from_db(hand_id: str, con: duckdb.DuckDBPyConnection) -> 'Hand':
         # Load hand-level info
         hand_row = con.sql(f"SELECT * FROM hands WHERE hand_id='{hand_id}'").df().iloc[0]
         hand = Hand(
@@ -64,6 +64,8 @@ class Hand:
                 action_index=row['action_index'],
                 action_type=row['action_type'],
                 amount=row.get('amount', 0),
+                total_pot_amount=row.get('total_pot_amount', 0),
+                street_index=row.get('street_index', 0),
                 cards=row.get('cards'),
                 is_terminal=row.get('is_terminal', False),
                 raw_action=row.get('raw_action')

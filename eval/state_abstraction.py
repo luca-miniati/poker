@@ -1,3 +1,4 @@
+import numpy as np
 import duckdb
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List
@@ -7,7 +8,7 @@ from data.model.hand import Hand
 
 
 @dataclass
-class StateFeature:
+class Feature:
     '''
     Defines how to bucket one feature of a hand/action pair.
     
@@ -37,11 +38,11 @@ class StateBucket:
     features: Dict[str, str]
 
 
-class StateAbstraction:
+class Abstraction:
     '''
     Maps game states to discrete buckets.
     '''
-    def __init__(self, features: List[StateFeature]):
+    def __init__(self, features: List[Feature]):
         self.features = features
         self.feature_names = [f.name for f in features]
         self.buckets: Dict[str, StateBucket] = {}
@@ -100,16 +101,43 @@ def bucket_position(hh: Hand, a: int):
         11: ['early', 'early', 'early', 'early', 'middle', 'middle', 'middle', 'middle', 'late', 'late', 'late'],
         12: ['early', 'early', 'early', 'early', 'early', 'middle', 'middle', 'middle', 'middle', 'late', 'late', 'late']
     }
-    player_idx = hh.actions[a - 1].player_idx
+    player_idx = hh.actions[a].player_idx
     return positions[hh.num_players][player_idx]
 
-if __name__ == '__main__':
+def bucket_street(hh: Hand, a: int):
+    streets = {
+        0: 'preflop',
+        1: 'flop',
+        2: 'turn',
+        3: 'river'
+    }
+    street_index = hh.actions[a].street_index
+    if street_index not in streets:
+        return 'unknown'
+    return streets[street_index]
 
-    f = StateFeature('position', bucket_position, ['early', 'middle', 'late'])
-    s = StateAbstraction([f])
+def bucket_bet_size_bb(hh: Hand, a: int):
+    action = hh.actions[a]
+    if np.isnan(action.amount) or action.amount is None:
+        return 'N/A'
+    x = action.amount / hh.min_bet  # min_bet = 1bb
+    if x <= 3: return '(0,3]'
+    elif x <= 9: return '(3,9]'
+    elif x <= 27: return '(9,27]'
+    elif x <= 54: return '(27,54]'
+    elif x <= 108: return '(54,108]'
+    else: return '(108,inf)'
+
+if __name__ == '__main__':
+    f1 = Feature('position', bucket_position, ['early', 'middle', 'late'])
+    f2 = Feature('street', bucket_street, ['preflop', 'flop', 'turn', 'river'])
+    f3 = Feature('bet size', bucket_bet_size_bb, ['N/A', '(0, 3]', '(3, 9]', '(9, 27]', '(27, 54]', '(54, 108]', '(108, inf)'])
+    s = Abstraction([f1, f2, f3])
     con = duckdb.connect('data/db/master.db')
-    hh = Hand.from_db('26505473230', con)
+    id: str = con.sql('select hand_id from hands order by num_actions desc limit 10;').fetchall()[4][0]
+    hh = Hand.from_db(id, con)
     for action in hh.actions:
-        if action.player_idx is not None:
+        if action.player_idx is not None and action.street_index is not None:
             print(f'action: {action.raw_action}')
             print(f'mapping to: {s(hh, action.action_index)}')
+            print()

@@ -5,8 +5,15 @@ import pandas as pd
 from typing import Optional, Tuple, List
 from pokerkit import HandHistory
 
-
-HOLDEM_HOLE_CARDS_SHOWN_REGEX = r'p(\d+)\s+sm\s+([2-9TJQKA][cdhs])([2-9TJQKA][cdhs])'
+PREFLOP = 0
+FLOP = 1
+TURN = 2
+RIVER = 3
+HOLDEM_CARD_REGEX = r'([2-9TJQKA][cdhs])' 
+HOLDEM_HOLE_CARDS_SHOWN_REGEX = r'p(\d+)\s+sm\s+' + 2 * HOLDEM_CARD_REGEX
+DEAL_FLOP_REGEX = r'd db ' + 3 * HOLDEM_CARD_REGEX
+DEAL_TURN_REGEX = r'd db ' + HOLDEM_CARD_REGEX
+DEAL_RIVER_REGEX = r'd db ' + HOLDEM_CARD_REGEX
 # action parsing regex:
 # ^\s*                      # optional leading whitespace
 # (?P<actor>\S+)            # actor: p1, p2, d

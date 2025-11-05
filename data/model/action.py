@@ -9,6 +9,8 @@ class Action:
     action_index: int
     action_type: str
     amount: float = 0
+    total_pot_amount: float = 0
+    street_index: int = 0
     cards: Optional[str] = None
     is_terminal: bool = False
     raw_action: Optional[str] = None

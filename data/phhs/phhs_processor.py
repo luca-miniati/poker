@@ -8,7 +8,18 @@ from logging import Logger
 from typing import Dict, List
 from pokerkit import HandHistory
 from data.utils.logs import setup_logging
-from data.utils.hand_history import are_holdem_hole_cards_shown, ACTION_PARSING_REGEX, HOLDEM_HOLE_CARDS_SHOWN_REGEX
+from data.utils.hand_history import (
+    are_holdem_hole_cards_shown,
+    ACTION_PARSING_REGEX,
+    HOLDEM_HOLE_CARDS_SHOWN_REGEX,
+    PREFLOP,
+    FLOP,
+    TURN,
+    RIVER,
+    DEAL_FLOP_REGEX,
+    DEAL_TURN_REGEX,
+    DEAL_RIVER_REGEX
+)
 
 
 OUTPUT_DIR = Path('data/phhs/out')
@@ -38,7 +49,7 @@ class PHHSProcessor:
     - `actions`
     Then, 3 corresponding tables are created in `data/db/master.db`.
     '''
-    def __init__(self, root_dir: str, batch_size: int = 100_000) -> None:
+    def __init__(self, root_dir: str, batch_size: int = 50_000) -> None:
         self.root_dir: Path = Path(root_dir)
         self.log: Logger = setup_logging(log_dir=LOG_DIR, script_name=Path(__file__).name)
         self.batch_size: int = batch_size
@@ -102,17 +113,26 @@ class PHHSProcessor:
         Given a hand history, construct rows for table `actions`.
         '''
         rows: List[Dict] = []
-        action_idx = 1
+        action_index = 0
+        street_index = PREFLOP
         for state, action in hh.state_actions:
             if not action: continue
 
+            if street_index == PREFLOP and re.match(DEAL_FLOP_REGEX, action.strip()):
+                street_index = FLOP
+            elif street_index == FLOP and re.match(DEAL_TURN_REGEX, action.strip()):
+                street_index = TURN
+            elif street_index == TURN and re.match(DEAL_RIVER_REGEX, action.strip()):
+                street_index = RIVER
+
             action_dict = {
                 'hand_id': hand_id,
-                'action_index': action_idx,
+                'action_index': action_index,
                 'actor': None,
                 'action_type': None,
                 'amount': None,
                 'total_pot_amount': state.total_pot_amount,
+                'street_index': street_index,
                 'is_terminal': not state.status,
                 'cards': None,
                 'raw_action': action.strip()
@@ -144,7 +164,7 @@ class PHHSProcessor:
             action_dict['cards'] = cards
 
             rows.append(action_dict)
-            action_idx += 1
+            action_index += 1
         return rows
 
 
@@ -192,6 +212,7 @@ class PHHSProcessor:
         actions_df['action_index'] = actions_df['action_index'].astype(int)
         actions_df['amount'] = actions_df['amount'].astype('Float64')
         actions_df['total_pot_amount'] = actions_df['total_pot_amount'].astype('Float64')
+        actions_df['street_index'] = actions_df['street_index'].astype('Int8')
         actions_df['is_terminal'] = actions_df['is_terminal'].astype(bool)
 
         hands_filename = PARQUET_HANDS_DIR / f'part-{self.batch_index:06d}.parquet'
@@ -256,10 +277,7 @@ class PHHSProcessor:
         '''
         warnings.filterwarnings('ignore', category=UserWarning, module='pokerkit.notation')
         warnings.filterwarnings('ignore', category=UserWarning, module='pokerkit.state')
-        folders: List[Path] = [p for p in self.root_dir.iterdir() if p.is_dir()]
-        self.log.info(f'Found {len(folders)} folders')
-        for folder_path in folders:
-            self.process_folder(folder_path)
+        self.process_folder(self.root_dir)
         
         self.flush_hh_buffer()
 
@@ -275,5 +293,5 @@ if __name__ == '__main__':
     root_dir = args.root_dir
 
     hhqp = PHHSProcessor(root_dir)
-    # hhqp.process()
+    hhqp.process()
     hhqp.create_tables()

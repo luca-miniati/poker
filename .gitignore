@@ -1,6 +1,7 @@
 **/.venv/
 **/__pycache__/
 **/.vscode/
+**/incoming
 data/**/parquet/
 data/**/logs/
 db/
