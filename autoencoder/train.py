@@ -8,6 +8,7 @@ import numpy as np
 
 from .dataset import create_train_val_dataloaders
 from .model import HandHistoryAutoencoder, AutoencoderLoss, count_parameters
+from data.utils.hand_encoder import HandEncoder
 
 
 def train_epoch(model, loader, optimizer, criterion, device, epoch):
@@ -135,7 +136,7 @@ def main():
     # Initialize model
     print('\nInitializing model...')
     model = HandHistoryAutoencoder(
-        input_dim=119,
+        input_dim=HandEncoder.output_dim,
         hidden_dim=args.hidden_dim,
         latent_dim=args.latent_dim,
         num_layers=args.num_layers,

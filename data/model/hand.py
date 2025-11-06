@@ -51,7 +51,7 @@ class Hand:
                 hand_id=row['hand_id'],
                 player_idx=row['player_idx'],
                 blind_or_straddle=row.get('blind_or_straddle', 0),
-                hole_cards=row.get('hole_cards'),
+                hole_cards=textwrap.wrap(row.get('hole_cards') or '', 2),
                 payoff=row.get('payoff', 0)
             )
             hand.add_player(player)

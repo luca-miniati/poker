@@ -40,7 +40,7 @@ class HandHistoryDataset(Dataset):
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, int]:
         '''
         Returns:
-            encoded_hand: (seq_len, 119) tensor
+            encoded_hand: (seq_len, hand_encoding_length) tensor
             original_length: actual number of actions before padding
         '''
         hand_id = self.hand_ids[idx]
@@ -49,7 +49,7 @@ class HandHistoryDataset(Dataset):
         hand = Hand.from_db(hand_id, self.con)
         
         # Encode using your existing encoder
-        encoded = self.encoder.encode(hand)  # (num_actions, 119)
+        encoded = self.encoder.encode(hand)  # (num_actions, hand_encoding_length)
         
         # Truncate if too long
         if len(encoded) > self.max_actions:
@@ -75,7 +75,7 @@ def collate_fn(batch: List[Tuple[torch.Tensor, int]]) -> Tuple[torch.Tensor, tor
         batch: List of (tensor, length) tuples
     
     Returns:
-        padded_sequences: (batch_size, max_seq_len, 119) padded tensor
+        padded_sequences: (batch_size, max_seq_len, hand_encoding_length) padded tensor
         lengths: (batch_size,) original sequence lengths
         mask: (batch_size, max_seq_len) boolean mask (1 for real data, 0 for padding)
     '''

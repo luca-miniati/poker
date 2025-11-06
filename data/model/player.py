@@ -8,7 +8,7 @@ class Player:
     hand_id: str
     player_idx: int
     blind_or_straddle: float = 0
-    hole_cards: Optional[str] = None
+    hole_cards: List[str] = field(default_factory=list)
     payoff: float = 0
     actions: List[Action] = field(default_factory=list)
 

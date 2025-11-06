@@ -2,6 +2,8 @@
 **/__pycache__/
 **/.vscode/
 **/incoming
+**/checkpoints
+**/runs
 data/**/parquet/
 data/**/logs/
 db/

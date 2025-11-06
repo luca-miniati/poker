@@ -8,7 +8,7 @@ class HandHistoryAutoencoder(nn.Module):
     
     def __init__(
         self,
-        input_dim: int = 119,
+        input_dim: int,
         hidden_dim: int = 256,
         latent_dim: int = 64,
         num_layers: int = 2,
@@ -16,7 +16,7 @@ class HandHistoryAutoencoder(nn.Module):
     ):
         '''
         Args:
-            input_dim: Dimension of each action vector (119 from HandEncoder)
+            input_dim: Dimension of each action vector (hand_encoding_length from HandEncoder)
             hidden_dim: Hidden dimension of LSTM layers
             latent_dim: Dimension of compressed latent vector
             num_layers: Number of LSTM layers
