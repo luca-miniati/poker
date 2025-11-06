@@ -1,5 +1,5 @@
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import Optional, List
 
 
 @dataclass
@@ -11,7 +11,7 @@ class Action:
     amount: float = 0
     total_pot_amount: float = 0
     street_index: int = 0
-    cards: Optional[str] = None
+    cards: List[str] = field(default_factory=list)
     is_terminal: bool = False
     raw_action: Optional[str] = None
 

@@ -158,7 +158,9 @@ class PHHSProcessor:
                     except ValueError:
                         amount = None
                 elif action_dict['action_type'] in {'dh', 'db', 'sm', 'sd'}:
-                    cards = args
+                    # expecting the cards to be a contiguous substring at the end
+                    # for example: p1 ????, p2 KhKd, d db 3c3s4d
+                    cards = args.split()[-1]
             
             action_dict['amount'] = amount
             action_dict['cards'] = cards

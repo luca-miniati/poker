@@ -1,0 +1,1 @@
+python -m autoencoder.train --db_path data/db/master.db

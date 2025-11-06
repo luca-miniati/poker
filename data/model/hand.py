@@ -1,4 +1,5 @@
 import duckdb
+import textwrap
 from dataclasses import dataclass, field
 from typing import List, Optional
 from .player import Player
@@ -66,7 +67,7 @@ class Hand:
                 amount=row.get('amount', 0),
                 total_pot_amount=row.get('total_pot_amount', 0),
                 street_index=row.get('street_index', 0),
-                cards=row.get('cards'),
+                cards=textwrap.wrap(row.get('cards') or '', 2),
                 is_terminal=row.get('is_terminal', False),
                 raw_action=row.get('raw_action')
             )

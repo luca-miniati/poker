@@ -57,7 +57,8 @@ class HandEncoder:
 
         for action in hand.actions:
             player = next((p for p in hand.players if f'p{p.player_idx}' == action.actor), None)
-            card_vec = encode_hole_cards(player.hole_cards if player else None)
+            hole_card_vec = encode_hole_cards(player.hole_cards if player else None)
+            community_card_vec = encode_community_cards(action.community_cards)
             street_vec = encode_street(action.street_index)
             pos = (player.player_idx + 1) / hand.num_players if player else 0.0
             pot_bb = float(action.total_pot_amount) / float(hand.min_bet or 1.0)
@@ -66,13 +67,14 @@ class HandEncoder:
             player_to_move = action.player_idx or -1.0
 
             x_t = np.concatenate([
-                card_vec,               # 106
-                street_vec,             # 4
-                np.array([pos]),        # 1
-                np.array([pot_bb]),     # 1
-                action_vec,             # 5
-                np.array([bet_bb]),     # 1
-                np.array([player_to_move]),    # 1
+                hole_card_vec,                  # 52 * 2 = 104
+                community_card_vec,             # 52 * 3 = 156
+                street_vec,                     # 4
+                np.array([pos]),                # 1
+                np.array([pot_bb]),             # 1
+                action_vec,                     # 5
+                np.array([bet_bb]),             # 1
+                np.array([player_to_move]),     # 1
             ])
             encoded_steps.append(x_t)
 
